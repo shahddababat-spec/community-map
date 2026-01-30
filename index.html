@@ -2,165 +2,134 @@
 <html lang="ar">
 <head>
   <meta charset="UTF-8">
-  <title>خريطة القصص – مخيم جنين</title>
+  <title>Community Stories Map</title>
 
-  <!-- Leaflet CSS -->
+  <!-- Leaflet -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
   <style>
     body {
-      margin: 0;
       font-family: Arial, sans-serif;
       direction: rtl;
-      background: #f4f4f4;
+      padding: 10px;
     }
-
-    .form {
-      padding: 15px;
-      background: white;
-    }
-
-    .form input,
-    .form textarea,
-    .form select,
-    .form button {
-      width: 100%;
-      margin-bottom: 10px;
-      padding: 8px;
-      font-size: 14px;
-    }
-
-    .form button {
-      background: #2c7be5;
-      color: white;
-      border: none;
-      cursor: pointer;
-    }
-
     #map {
-      height: 500px;
+      height: 400px;
+      margin-top: 10px;
+    }
+    input, textarea, select, button {
+      width: 100%;
+      margin: 5px 0;
+      padding: 8px;
     }
   </style>
 </head>
 
 <body>
 
-  <!-- ===== FORM ===== -->
-  <div class="form">
-    <h3>شارك قصتك</h3>
+  <!-- 📝 الفورم -->
+  <input id="name" placeholder="الاسم">
+  <input id="title" placeholder="عنوان القصة">
+  <textarea id="story" placeholder="اكتبي القصة"></textarea>
 
-    <input id="name" placeholder="اسمك (اختياري)">
-    <input id="title" placeholder="عنوان القصة">
+  <select id="category">
+    <option value="ذكرى">ذكرى</option>
+    <option value="حكاية">حكاية</option>
+    <option value="رأي">رأي</option>
+  </select>
 
-    <textarea id="story" placeholder="اكتب قصتك هنا"></textarea>
+  <!-- 📷 رفع صورة -->
+  <input type="file" id="photo" accept="image/*">
 
-    <select id="category">
-      <option value="">اختر الفئة</option>
-      <option value="ذكرى">ذكرى</option>
-      <option value="مكان">مكان</option>
-      <option value="حدث">حدث</option>
-      <option value="حكاية">حكاية</option>
-    </select>
+  <button onclick="submitStory()">إرسال</button>
 
-    <input type="file" id="photo" accept="image/*">
+  <p id="status"></p>
 
-    <button onclick="submitStory()">إرسال</button>
-
-    <p id="status"></p>
-  </div>
-
-  <!-- ===== MAP ===== -->
+  <!-- 🗺️ الخريطة -->
   <div id="map"></div>
 
-  <!-- Leaflet JS -->
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>
+  // 🔵 الخريطة – مخيم جنين
+  const map = L.map('map').setView([32.4603, 35.2956], 15);
 
-  <script>
-    /* ===== MAP SETUP ===== */
-    const map = L.map('map').setView([32.4603, 35.2952], 16);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap'
+  }).addTo(map);
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap'
-    }).addTo(map);
+  let selectedLatLng = null;
 
-    const bounds = [
-      [32.452, 35.285],
-      [32.468, 35.305]
-    ];
-    map.setMaxBounds(bounds);
+  map.on('click', function(e) {
+    selectedLatLng = e.latlng;
+    alert("تم اختيار الموقع");
+  });
 
-    let selectedLatLng = null;
+  async function submitStory() {
 
-    map.on('click', (e) => {
-      selectedLatLng = e.latlng;
-      alert("تم اختيار الموقع");
-    });
+    if (!selectedLatLng) {
+      alert("اختاري موقع على الخريطة");
+      return;
+    }
 
-    /* ===== SUBMIT STORY ===== */
-    async function submitStory() {
+    const name = document.getElementById("name").value;
+    const title = document.getElementById("title").value;
+    const story = document.getElementById("story").value;
+    const category = document.getElementById("category").value;
+    const file = document.getElementById("photo").files[0];
 
-      if (!selectedLatLng) {
-        alert("اختاري موقع على الخريطة أولاً");
+    let photoPayload = null;
+
+    // 📷 قراءة الصورة
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        alert("الصورة أكبر من 2MB");
         return;
       }
 
-      const status = document.getElementById("status");
-      status.innerText = "جاري الإرسال...";
-
-      /* ---- IMAGE ---- */
-      let photoPayload = null;
-      const file = document.getElementById("photo").files[0];
-
-      if (file) {
-        if (file.size > 2 * 1024 * 1024) {
-          alert("الصورة كبيرة، اختاري صورة أقل من 2MB");
-          return;
-        }
-
-        const dataUrl = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
-
-        photoPayload = {
-          fileName: file.name,
-          dataUrl: dataUrl
-        };
-      }
-
-      /* ---- SEND ---- */
-      fetch("https://script.google.com/macros/s/AKfycbyk8zbGnixeXAsexnu3z2BCMdRaUd1QJvN-uBWxEN2jtbbWP65xd6WZQITRCJP1bb_Zpg/exec", {
-        method: "POST",
-        body: JSON.stringify({
-          name: name.value,
-          title: title.value,
-          story: story.value,
-          category: category.value,
-          lat: selectedLatLng.lat,
-          lng: selectedLatLng.lng,
-          photo: photoPayload
-        })
-      })
-      .then(res => res.json())
-      .then(resp => {
-
-        const imgHtml = resp.photo_url
-          ? `<br><img src="${resp.photo_url}" style="max-width:220px;border-radius:10px;margin-top:6px;">`
-          : "";
-
-        L.marker(selectedLatLng)
-          .addTo(map)
-          .bindPopup(`<b>${title.value}</b><br>${story.value}${imgHtml}`);
-
-        status.innerText = "✅ تم الحفظ";
-      })
-      .catch(() => {
-        status.innerText = "❌ حصل خطأ";
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
       });
+
+      photoPayload = {
+        fileName: file.name,
+        dataUrl: dataUrl
+      };
     }
-  </script>
+
+    // 🚀 إرسال البيانات
+    fetch("https://script.google.com/macros/s/AKfycbyk8zbGnixeXAsexnu3z2BCMdRaUd1QJvN-uBWxEN2jtbbWP65xd6WZQITRCJP1bb_Zpg/exec", {
+      method: "POST",
+      body: JSON.stringify({
+        name,
+        title,
+        story,
+        category,
+        lat: selectedLatLng.lat,
+        lng: selectedLatLng.lng,
+        photo: photoPayload
+      })
+    })
+    .then(res => res.json())
+    .then(resp => {
+
+      const imgHtml = resp.photo_url
+        ? `<br><img src="${resp.photo_url}" style="max-width:220px;border-radius:10px;margin-top:5px;">`
+        : "";
+
+      L.marker(selectedLatLng).addTo(map)
+        .bindPopup(`<b>${title}</b><br>${story}${imgHtml}`);
+
+      document.getElementById("status").innerText = "✔ تم الحفظ";
+    })
+    .catch(() => {
+      document.getElementById("status").innerText = "❌ خطأ بالإرسال";
+    });
+  }
+</script>
 
 </body>
 </html>
+
