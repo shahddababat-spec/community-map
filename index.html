@@ -50,7 +50,6 @@
 
     #status { margin: 6px 0 0; font-size: 13px; color:#111; }
 
-    /* شاشة الشكر */
     .thanks {
       height: 100vh;
       display:flex;
@@ -84,7 +83,6 @@
       <option value="اقتراح">اقتراح</option>
     </select>
 
-    <!-- النص قبل Choose File -->
     <label for="photo">شاركي صورة (اختياري)</label>
     <input type="file" id="photo" accept="image/*">
 
@@ -96,10 +94,8 @@
 
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script>
-    // ✅ رابط Google Apps Script Web App (اللي بعتيه)
     const API_URL = "https://script.google.com/macros/s/AKfycbyk8zbGnixeXAsexnu3z2BCMdRaUd1QJvN-uBWxEN2jtbbWP65xd6WZQITRCJP1bb_Zpg/exec";
 
-    // عناصر الفورم
     const elName = document.getElementById("name");
     const elTitle = document.getElementById("title");
     const elStory = document.getElementById("story");
@@ -108,30 +104,23 @@
     const elStatus = document.getElementById("status");
     const elSendBtn = document.getElementById("sendBtn");
 
-    // ✅ إحداثيات تقريبية لمخيم جنين (ممكن تغيّريها)
     const JENIN_CAMP_CENTER = [32.4632, 35.3015];
     const START_ZOOM = 15;
 
-    // خريطة
-    const map = L.map('map', {
-      zoomControl: true
-    }).setView(JENIN_CAMP_CENTER, START_ZOOM);
+    const map = L.map('map', { zoomControl: true }).setView(JENIN_CAMP_CENTER, START_ZOOM);
 
-    // طبقة الخريطة
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '&copy; OpenStreetMap'
     }).addTo(map);
 
-    // ✅ حدود تقريبية للمخيم (اختياري) — تمنع الخروج بعيد
     const bounds = L.latLngBounds(
-      [32.455, 35.288], // جنوب غرب
-      [32.466, 35.302]  // شمال شرق
+      [32.455, 35.288],
+      [32.466, 35.302]
     );
     map.setMaxBounds(bounds);
     map.on('drag', function() { map.panInsideBounds(bounds, { animate: false }); });
 
-    // اختيار نقطة
     let selectedLatLng = null;
     let tempMarker = null;
 
@@ -186,7 +175,7 @@
         const file = elPhoto.files && elPhoto.files[0];
 
         if (file) {
-          // حد 2MB عشان Apps Script
+          // حد 2MB
           if (file.size > 2 * 1024 * 1024) {
             alert("الصورة كبيرة. اختاري صورة أصغر من 2MB.");
             elSendBtn.disabled = false;
@@ -195,6 +184,15 @@
           }
 
           const dataUrl = await fileToDataUrl(file);
+
+          // ✅ تأكيد أن الصورة انقرأت فعلاً
+          if (!dataUrl || !String(dataUrl).startsWith("data:image/")) {
+            alert("صار مشكلة بقراءة الصورة. جرّبي صورة ثانية.");
+            elSendBtn.disabled = false;
+            elStatus.textContent = "";
+            return;
+          }
+
           photoPayload = { fileName: file.name, dataUrl };
         }
 
@@ -208,16 +206,33 @@
           photo: photoPayload
         };
 
-        // مهم: نخليها text/plain لتقليل مشاكل CORS / preflight
+        // ✅ مهم: نستخدم text/plain لتقليل مشاكل CORS / preflight
         const res = await fetch(API_URL, {
           method: "POST",
           headers: { "Content-Type": "text/plain;charset=utf-8" },
           body: JSON.stringify(payload)
         });
 
-        const resp = await res.json();
+        // ✅ بدل res.json() (أضمن مع Apps Script)
+        const text = await res.text();
+        let resp;
+        try {
+          resp = JSON.parse(text);
+        } catch (e) {
+          console.error("Response not JSON:", text);
+          throw new Error("الرد من السيرفر مش JSON");
+        }
 
-        // عرض ماركر نهائي + صورة إن وجدت
+        if (!resp.ok) {
+          console.error(resp);
+          elStatus.textContent = "فشل الحفظ: " + (resp.error || "خطأ غير معروف");
+          elSendBtn.disabled = false;
+          return;
+        }
+
+        // (اختياري) اعرضي حالة الصورة للتشخيص
+        // elStatus.textContent = `تم الحفظ ✅ | photo_status: ${resp.photo_status || "?"}`;
+
         const imgHtml = resp.photo_url
           ? `<br><img src="${resp.photo_url}" style="max-width:220px;border-radius:10px;margin-top:8px;">`
           : "";
@@ -225,7 +240,6 @@
         L.marker(selectedLatLng).addTo(map)
           .bindPopup(`<b>${escapeHtml(title)}</b><br>${escapeHtml(story)}${imgHtml}`);
 
-        // ✅ بعد ما ينحفظ: صفحة شكر
         showThankYou();
 
       } catch (err) {
@@ -235,7 +249,6 @@
       }
     }
 
-    // حماية بسيطة للنص داخل popup
     function escapeHtml(str) {
       return String(str)
         .replaceAll("&", "&amp;")
@@ -248,4 +261,5 @@
 
 </body>
 </html>
+
 
