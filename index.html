@@ -50,7 +50,7 @@
 
     #status { margin: 6px 0 0; font-size: 13px; color:#111; }
 
-    /* شاشة الشكر */
+    /* صفحة الشكر */
     .thanks {
       height: 100vh;
       display:flex;
@@ -87,7 +87,7 @@
     <label for="photo">شاركي صورة (اختياري)</label>
     <input type="file" id="photo" accept="image/*">
 
-    <button id="sendBtn" onclick="submitStory()">إرسال</button>
+    <button id="sendBtn" type="button">إرسال</button>
     <p id="status"></p>
   </div>
 
@@ -95,7 +95,7 @@
 
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script>
-    // ✅ بدّلي هذا برابط الـ Web App بعد Deploy
+    // 🔴 غيّري الرابط هذا بالرابط الجديد من Deploy
     const API_URL = "https://script.google.com/macros/s/AKfycbyk8zbGnixeXAsexnu3z2BCMdRaUd1QJvN-uBWxEN2jtbbWP65xd6WZQITRCJP1bb_Zpg/exec";
 
     const elName = document.getElementById("name");
@@ -117,7 +117,7 @@
       attribution: '&copy; OpenStreetMap'
     }).addTo(map);
 
-    // حدود تقريبية (اختياري)
+    // حدود تقريبية للمخيم (اختياري)
     const bounds = L.latLngBounds(
       [32.455, 35.288],
       [32.466, 35.302]
@@ -130,8 +130,8 @@
 
     map.on('click', function(e) {
       selectedLatLng = e.latlng;
-
       if (tempMarker) map.removeLayer(tempMarker);
+
       tempMarker = L.marker(selectedLatLng).addTo(map)
         .bindPopup("✅ تم اختيار الموقع").openPopup();
     });
@@ -145,6 +145,15 @@
           </div>
         </div>
       `;
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
     }
 
     async function fileToDataUrl(file) {
@@ -179,14 +188,13 @@
         const file = elPhoto.files && elPhoto.files[0];
 
         if (file) {
-          // حد 2MB
+          // ✅ حد 2MB (عشان Apps Script)
           if (file.size > 2 * 1024 * 1024) {
             alert("الصورة كبيرة. اختاري صورة أصغر من 2MB.");
             elSendBtn.disabled = false;
             elStatus.textContent = "";
             return;
           }
-
           const dataUrl = await fileToDataUrl(file);
           photoPayload = { fileName: file.name, dataUrl };
         }
@@ -201,34 +209,38 @@
           photo: photoPayload
         };
 
+        // مهم: text/plain لتخفيف مشاكل CORS
         const res = await fetch(API_URL, {
           method: "POST",
           headers: { "Content-Type": "text/plain;charset=utf-8" },
           body: JSON.stringify(payload)
         });
 
-        // ✅ مهم: لو الرد مش JSON (أحياناً بسبب Deploy) بنطلّع النص
-        let respText = await res.text();
-        let resp;
-        try { resp = JSON.parse(respText); }
-        catch { resp = { ok:false, error:"Response not JSON", raw: respText }; }
+        const resp = await res.json();
 
+        // ✅ لو في خطأ من السيرفر
         if (!resp.ok) {
-          elStatus.textContent = "فشل الحفظ";
-          alert("خطأ من السيرفر:\n" + JSON.stringify(resp, null, 2));
+          console.log(resp);
+          elStatus.textContent = "فشل الحفظ: " + (resp.error || "غير معروف");
           elSendBtn.disabled = false;
           return;
         }
 
-        // popup الصورة لو انحفظت
+        // ✅ لو الصورة كبيرة/ما انحفظت: نعرض سببها
+        if (resp.photo_status && resp.photo_status !== "photo_saved" && resp.photo_status !== "no_photo") {
+          console.log("Photo status:", resp.photo_status, "size:", resp.photo_size);
+          // لا نوقف الإرسال، بس نعرف السبب
+        }
+
+        // Popup مع صورة إذا انحفظت
         const imgHtml = resp.photo_url
           ? `<br><img src="${resp.photo_url}" style="max-width:220px;border-radius:10px;margin-top:8px;">`
-          : `<br><small style="color:#555">لم يتم حفظ صورة (status: ${resp.photo_status || "?"})</small>`;
+          : "";
 
         L.marker(selectedLatLng).addTo(map)
           .bindPopup(`<b>${escapeHtml(title)}</b><br>${escapeHtml(story)}${imgHtml}`);
 
-        // ✅ صفحة شكر
+        // ✅ صفحة الشكر
         showThankYou();
 
       } catch (err) {
@@ -238,18 +250,13 @@
       }
     }
 
-    function escapeHtml(str) {
-      return String(str)
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
-    }
+    elSendBtn.addEventListener("click", submitStory);
   </script>
 
 </body>
 </html>
+
+
 
 
 
